@@ -1,0 +1,368 @@
+---
+title: "Práctica R"
+author: "Carmen Amenedo Peñamaría"
+date: "2026-10-29"
+output: html_document
+---
+# Ejercicio 1
+
+Leer el fichero `comptagevelo2017.csv` como un dataframe.
+
+```{r}
+library(tidyverse)
+library(lubridate)
+
+comptage <- read_csv("comptagevelo2017.csv")
+```
+
+# Ejercicio 2
+
+Eliminar la columna 2 del dataframe.
+
+```{r}
+comptage <- comptage %>%
+  select(-2)
+```
+
+# Ejercicio 3
+
+Transformar el dataframe para que cada columna represente una única variable.
+
+```{r}
+comptage <- comptage %>%
+  pivot_longer(
+    cols = -Date,
+    names_to = "distrito",
+    values_to = "ciclistas"
+  )
+```
+# Ejercicio 4
+
+Crear tres nuevas variables con la información del día, mes y año, manteniendo la columna `Date`.
+
+```{r}
+comptage <- comptage %>%
+  mutate(
+    dia = day(dmy(Date)),
+    mes = month(dmy(Date)),
+    anio = year(dmy(Date))
+  )
+```
+
+# Ejercicio 5
+
+Convertir la columna `Date` a tipo fecha.
+
+```{r}
+comptage <- comptage %>%
+  mutate(Date = dmy(Date))
+```
+
+# Ejercicio 6
+
+Eliminar los espacios alrededor de "/" en los nombres de los distritos.
+
+```{r}
+comptage <- comptage %>%
+  mutate(
+    distrito = str_replace_all(distrito, "\\s*/\\s*", "/")
+  )
+```
+
+# Ejercicio 7
+
+Calcular el porcentaje de días en los que faltan datos para cada distrito.
+
+```{r}
+missing_distrito <- comptage %>%
+  group_by(distrito) %>%
+  summarise(
+    porcentaje_missing = mean(is.na(ciclistas)) * 100
+  )
+
+missing_distrito
+```
+
+# Ejercicio 8
+
+Calcular el total de ciclistas que pasa por cada distrito a lo largo del año.
+
+```{r}
+total_distrito <- comptage %>%
+  group_by(distrito) %>%
+  summarise(
+    total_ciclistas = sum(ciclistas, na.rm = TRUE)
+  )
+
+total_distrito
+```
+
+# Ejercicio 9
+
+Obtener los cinco distritos con mayor número de ciclistas.
+
+```{r}
+top5_distritos <- total_distrito %>%
+  arrange(desc(total_ciclistas)) %>%
+  slice_head(n = 5)
+
+top5_distritos
+```
+
+Los cinco distritos con más ciclistas son Saint-Laurent/Bellechasse, Rachel/Papineau, Berri1, Maisonneuve_2 y Brébeuf.
+
+# Ejercicio 10
+
+Realizar un gráfico de barras horizontales del total de ciclistas por distrito.
+
+```{r}
+ggplot(
+  total_distrito,
+  aes(x = total_ciclistas, y = distrito)
+) +
+  geom_col() +
+  labs(
+    x = "Total de ciclistas",
+    y = "Distrito",
+    title = "Total de ciclistas por distrito en 2017"
+  )
+```
+
+# Ejercicio 11
+
+Realizar un gráfico de líneas con la evolución mensual de ciclistas para cada distrito.
+
+```{r}
+mensual_distrito <- comptage %>%
+  group_by(distrito, mes) %>%
+  summarise(
+    total_ciclistas = sum(ciclistas, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+ggplot(
+  mensual_distrito,
+  aes(
+    x = mes,
+    y = total_ciclistas,
+    color = distrito,
+    group = distrito
+  )
+) +
+  geom_line() +
+  labs(
+    x = "Mes",
+    y = "Número de ciclistas",
+    color = "Distrito",
+    title = "Evolución mensual de ciclistas por distrito"
+  )
+```
+
+# Ejercicio 12
+
+Ordenar las barras del gráfico de mayor a menor según el número de ciclistas.
+
+```{r}
+ggplot(
+  total_distrito,
+  aes(
+    x = total_ciclistas,
+    y = reorder(distrito, total_ciclistas)
+  )
+) +
+  geom_col() +
+  labs(
+    x = "Total de ciclistas",
+    y = "Distrito",
+    title = "Total de ciclistas por distrito en 2017"
+  )
+```
+
+# Ejercicio 13
+
+Añadir al gráfico mensual una línea azul y más ancha con la media de ciclistas por mes.
+
+```{r}
+media_mensual <- mensual_distrito %>%
+  group_by(mes) %>%
+  summarise(
+    media_ciclistas = mean(total_ciclistas, na.rm = TRUE)
+  )
+
+ggplot(
+  mensual_distrito,
+  aes(
+    x = mes,
+    y = total_ciclistas,
+    color = distrito,
+    group = distrito
+  )
+) +
+  geom_line() +
+  geom_line(
+    data = media_mensual,
+    aes(
+      x = mes,
+      y = media_ciclistas
+    ),
+    inherit.aes = FALSE,
+    color = "blue",
+    linewidth = 2
+  ) +
+  labs(
+    x = "Mes",
+    y = "Número de ciclistas",
+    color = "Distrito",
+    title = "Evolución mensual de ciclistas por distrito"
+  )
+```
+
+# Ejercicio 14
+
+Realizar un gráfico de barras del número de ciclistas para cada día de la semana en los cinco distritos con más ciclistas.
+
+```{r}
+comptage <- comptage %>%
+  mutate(
+    dia_semana = wday(
+      Date,
+      label = TRUE,
+      abbr = FALSE,
+      week_start = 1
+    )
+  )
+
+semana_top5 <- comptage %>%
+  filter(distrito %in% top5_distritos$distrito) %>%
+  group_by(distrito, dia_semana) %>%
+  summarise(
+    total_ciclistas = sum(ciclistas, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+ggplot(
+  semana_top5,
+  aes(x = dia_semana, y = total_ciclistas)
+) +
+  geom_col() +
+  facet_wrap(~ distrito, scales = "free_y") +
+  labs(
+    x = "Día de la semana",
+    y = "Número de ciclistas",
+    title = "Ciclistas por día de la semana en los cinco distritos con más ciclistas"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+# Ejercicio 15
+
+Completar los valores missing con la media de ciclistas agrupada por distrito y mes.
+
+```{r}
+comptage <- comptage %>%
+  group_by(distrito, mes) %>%
+  mutate(
+    ciclistas = if_else(
+      is.na(ciclistas),
+      mean(ciclistas, na.rm = TRUE),
+      ciclistas
+    )
+  ) %>%
+  ungroup()
+
+sum(is.na(comptage$ciclistas))
+```
+
+Quedan 61 valores missing correspondientes a Pont Jacques-Cartier en los meses de junio y julio. En estos grupos todos los valores son missing, por lo que no existe ninguna observación disponible con la que calcular la media del distrito y mes.
+
+# Ejercicio 16
+
+Leer el fichero `localisationcompteursvelo2015.csv` utilizando la codificación ISO-8859-1.
+
+```{r}
+localizacion <- read_csv(
+  "localisationcompteursvelo2015.csv",
+  locale = locale(encoding = "ISO-8859-1")
+)
+
+glimpse(localizacion)
+```
+
+# Ejercicio 17
+
+Realizar un gráfico de puntos de las coordenadas, utilizando el color para representar `Type` y la forma para representar `Etat`.
+
+```{r}
+ggplot(
+  localizacion,
+  aes(
+    x = coord_X,
+    y = coord_Y,
+    color = Type,
+    shape = Etat
+  )
+) +
+  geom_point(size = 3) +
+  labs(
+    x = "Coordenada X",
+    y = "Coordenada Y",
+    color = "Tipo",
+    shape = "Estado",
+    title = "Localización de los contadores de bicicletas"
+  )
+```
+
+# Ejercicio 18
+
+Realizar un join entre los dos dataframes mediante el nombre del distrito y `nom_comptage`.
+
+```{r}
+datos_join <- total_distrito %>%
+  left_join(
+    localizacion,
+    by = c("distrito" = "nom_comptage")
+  )
+
+glimpse(datos_join)
+```
+
+# Ejercicio 19
+
+Identificar los distritos del primer dataframe que no se encuentran en el segundo.
+
+```{r}
+distritos_sin_localizacion <- total_distrito %>%
+  anti_join(
+    localizacion,
+    by = c("distrito" = "nom_comptage")
+  )
+
+distritos_sin_localizacion
+```
+
+Los distritos que no se encuentran en el segundo dataframe son Boyer 2, CSC (Côte Sainte-Catherine), Christophe-Colomb, Eco-Totem - Métro Laurier y Saint-Laurent/Bellechasse.
+
+# Ejercicio 20
+
+Representar las coordenadas de los contadores utilizando el tamaño de los puntos para representar el número total de ciclistas.
+
+```{r}
+ggplot(
+  datos_join,
+  aes(
+    x = coord_X,
+    y = coord_Y,
+    size = total_ciclistas
+  )
+) +
+  geom_point(alpha = 0.7, na.rm = TRUE) +
+  labs(
+    x = "Coordenada X",
+    y = "Coordenada Y",
+    size = "Total de ciclistas",
+    title = "Total de ciclistas según la localización del contador"
+  )
+```
+
